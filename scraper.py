@@ -1,64 +1,72 @@
-import requests
+import json
+import time
+from urllib.parse import urljoin
+
 import cloudscraper
 from lxml import html
+
+# Reuse one Cloudflare-aware scraper session for all requests
+SCRAPER = cloudscraper.create_scraper()
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Referer": "https://www.google.com/",
+}
 
 BASE_URL = "https://www.imovelweb.com.br/casas-venda-sao-paulo-sp-pagina-{}.html"
 
 
-def _fetch(url, headers):
-    """Fetch a URL using requests, falling back to cloudscraper on 403."""
-    resp = requests.get(url, headers=headers)
-    if hasattr(resp, "status_code") and resp.status_code == 403:
-        scraper = cloudscraper.create_scraper()
-        resp = scraper.get(url, headers=headers)
+def _fetch(url, headers=HEADERS):
+    """Fetch a URL using a persistent cloudscraper session."""
+    resp = SCRAPER.get(url, headers=headers)
+    print(resp.url, resp.status_code, len(resp.text))
     return resp
 
 
 def get_listing_links(pages=3):
+    """Collect listing URLs from the paginated results."""
     links = []
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/125.0 Safari/537.36"
-        ),
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Referer": "https://www.google.com/",
-    }
     for page in range(1, pages + 1):
         url = BASE_URL.format(page)
         print(f"Fetching page {page}: {url}")
-        resp = _fetch(url, headers)
+        resp = _fetch(url, HEADERS)
         resp.raise_for_status()
-        tree = html.fromstring(resp.content)
-        index = 1
-        while True:
-            xpath = f"/html/body/div[1]/div[2]/div/div/div[1]/div[2]/div[2]/div[{index}]/div/div[1]/div[2]/div[1]/div[1]/h3/a"
-            nodes = tree.xpath(xpath)
-            if not nodes:
-                break
-            link = nodes[0].get('href')
-            if link and link not in links:
-                links.append(link)
-            index += 1
+        tree = html.fromstring(resp.text)
+
+        found = False
+        for a in tree.cssselect("article h3 a[href]"):
+            href = a.get("href")
+            if href and href not in links:
+                links.append(urljoin(url, href))
+                found = True
+
+        if not found:
+            script_nodes = tree.xpath('//script[@id="__NUXT__" or @id="__NEXT_DATA__"]/text()')
+            if script_nodes:
+                try:
+                    data = json.loads(script_nodes[0])
+                    adverts = data.get("data", [{}])[0].get("adverts", [])
+                    for advert in adverts:
+                        href = advert.get("url") or advert.get("ad_url")
+                        if href and href not in links:
+                            links.append(href)
+                except Exception:
+                    pass
+
+        time.sleep(1)
     return links
 
 
 def extract_script_content(url, script_index=11):
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/125.0 Safari/537.36"
-        ),
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Referer": "https://www.google.com/",
-    }
-    resp = _fetch(url, headers)
+    resp = _fetch(url, HEADERS)
     resp.raise_for_status()
-    tree = html.fromstring(resp.content)
+    tree = html.fromstring(resp.text)
     xpath = f"/html/head/script[{script_index}]"
     nodes = tree.xpath(xpath)
     if nodes:
