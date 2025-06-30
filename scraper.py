@@ -1,7 +1,17 @@
 import requests
+import cloudscraper
 from lxml import html
 
 BASE_URL = "https://www.imovelweb.com.br/casas-venda-sao-paulo-sp-pagina-{}.html"
+
+
+def _fetch(url, headers):
+    """Fetch a URL using requests, falling back to cloudscraper on 403."""
+    resp = requests.get(url, headers=headers)
+    if hasattr(resp, "status_code") and resp.status_code == 403:
+        scraper = cloudscraper.create_scraper()
+        resp = scraper.get(url, headers=headers)
+    return resp
 
 
 def get_listing_links(pages=3):
@@ -19,7 +29,7 @@ def get_listing_links(pages=3):
     for page in range(1, pages + 1):
         url = BASE_URL.format(page)
         print(f"Fetching page {page}: {url}")
-        resp = requests.get(url, headers=headers)
+        resp = _fetch(url, headers)
         resp.raise_for_status()
         tree = html.fromstring(resp.content)
         index = 1
@@ -46,7 +56,7 @@ def extract_script_content(url, script_index=11):
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Referer": "https://www.google.com/",
     }
-    resp = requests.get(url, headers=headers)
+    resp = _fetch(url, headers)
     resp.raise_for_status()
     tree = html.fromstring(resp.content)
     xpath = f"/html/head/script[{script_index}]"
