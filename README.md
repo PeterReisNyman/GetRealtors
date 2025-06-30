@@ -1,1 +1,5 @@
-# GetRealtors\n\nRun `python scraper.py` to scrape listings (requires network). Run `pytest` to execute tests.
+# GetRealtors
+
+Install dependencies with `pip install -r requirements.txt`.
+Run `python scraper.py` to scrape listings (requires network).
+Run `pytest` to execute tests.
