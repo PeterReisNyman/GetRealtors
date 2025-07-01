@@ -115,13 +115,13 @@ def main() -> None:
         with sync_playwright() as pw:
 
             for n, href in enumerate(links, 1):
-                browser = pw.chromium.launch(headless=HEADLESS)
-                page = browser.new_page(locale="pt-BR")
                 url = href if href.startswith("http") else urljoin(BASE, href)
                 if url in processed:
                     print(f"[{n}/{len(links)}] {url} → skipping (already saved)")
                     continue
                 print(f"[{n}/{len(links)}] {url}")
+                browser = pw.chromium.launch(headless=HEADLESS)
+                page = browser.new_page(locale="pt-BR")
                 page.goto(url, timeout=60_000, wait_until="domcontentloaded")
 
                 html = page.content()
