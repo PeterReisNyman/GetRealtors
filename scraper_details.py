@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Read listing URLs from imovelweb_links.csv, visit each page, extract the rich
-JSON-LD block in <head>, and append the requested fields to
-imovelweb_details.csv (one row per listing).
+Read listing URLs from imovelweb_links.csv, visit each page once, extract the
+rich JSON-LD block in <head> along with the imobiliária name, and append the
+requested fields to imovelweb_details.csv (one row per listing). URLs already
+present in the CSV are skipped.
 """
 
 import csv, json, re, time
@@ -25,6 +26,14 @@ def load_links() -> list[str]:
         return [row["href"] for row in csv.DictReader(fh)]
 
 
+def load_processed() -> set[str]:
+    """Return URLs already saved to OUTPUT_CSV, if file exists."""
+    if not OUTPUT_CSV.exists():
+        return set()
+    with OUTPUT_CSV.open(newline="", encoding="utf-8") as fh:
+        return {row["url"] for row in csv.DictReader(fh)}
+
+
 def extract_jsonld(html: str) -> dict | None:
     """Return the first JSON dict that has `"telephone"`."""
     for m in re.finditer(
@@ -41,7 +50,7 @@ def extract_jsonld(html: str) -> dict | None:
     return None
 
 
-def format_row(d: dict, url: str) -> dict:
+def format_row(d: dict, url: str, imobiliaria: str) -> dict:
     """Return a flat dict with the columns we want."""
     addr = d.get("address", {})
     if isinstance(addr, dict):
@@ -72,12 +81,17 @@ def format_row(d: dict, url: str) -> dict:
         "numberOfBathroomsTotal": d.get("numberOfBathroomsTotal", ""),
         "numberOfBedrooms": d.get("numberOfBedrooms", ""),
         "address": address,
+        "imobiliaria": imobiliaria,
     }
 
 
 def main() -> None:
     links = load_links()
     print(f"Loaded {len(links)} hrefs")
+
+    processed = load_processed()
+    if processed:
+        print(f"{len(processed)} URLs already saved; will skip them")
 
     header = [
         "url",
@@ -90,6 +104,7 @@ def main() -> None:
         "numberOfBathroomsTotal",
         "numberOfBedrooms",
         "address",
+        "imobiliaria",
     ]
 
     with OUTPUT_CSV.open("a", newline="", encoding="utf-8") as out_fh:
@@ -103,15 +118,26 @@ def main() -> None:
 
             for n, href in enumerate(links, 1):
                 url = href if href.startswith("http") else urljoin(BASE, href)
+                if url in processed:
+                    print(f"[{n}/{len(links)}] {url} → skipping (already saved)")
+                    continue
                 print(f"[{n}/{len(links)}] {url}")
                 page.goto(url, timeout=60_000, wait_until="domcontentloaded")
 
                 html = page.content()
                 data = extract_jsonld(html)
 
+                imobiliaria_el = page.query_selector(
+                    "xpath=/html/body/div[2]/main/div/div/article/div/section[5]/div/div[1]/div/div[2]/h3"
+                )
+                imobiliaria = (
+                    imobiliaria_el.inner_text().strip() if imobiliaria_el else ""
+                )
+
                 if data:
-                    writer.writerow(format_row(data, url))
+                    writer.writerow(format_row(data, url, imobiliaria))
                     out_fh.flush()
+                    processed.add(url)
                     print("    ✓ saved row")
                 else:
                     print("    … JSON-LD with telephone not found")
