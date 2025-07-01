@@ -41,10 +41,10 @@ def scrape():
 
 
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=HEADLESS)
-            page = browser.new_page(locale="pt-BR")
 
             for page_no in range(START_PAGE, END_PAGE):
+                browser = pw.chromium.launch(headless=HEADLESS)
+                page = browser.new_page(locale="pt-BR")
                 url = BASE_URL_P1 if page_no == 1 else BASE_URL_N.format(page_no)
                 print(f"▶ page {page_no} → {url}")
                 page.goto(url, timeout=60_000)
@@ -72,7 +72,7 @@ def scrape():
 
                 print(f"    ✓ captured {idx-1} links")
 
-            browser.close()
+                browser.close()
 
 if __name__ == "__main__":
     scrape()
