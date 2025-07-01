@@ -11,8 +11,8 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError
 
 # ---------- tweak here -------------------------------------------------------
-START_PAGE = 1          # first page to visit (inclusive)
-END_PAGE   = 3          # stop BEFORE this page number
+START_PAGE = 10          # first page to visit (inclusive)
+END_PAGE   = 20          # stop BEFORE this page number
 CSV_FILE   = Path("imovelweb_links.csv")
 HEADLESS   = False      # flip to True to hide the browser
 # -----------------------------------------------------------------------------
