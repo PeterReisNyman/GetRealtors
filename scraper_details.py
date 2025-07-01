@@ -113,10 +113,10 @@ def main() -> None:
             writer.writeheader()
 
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=HEADLESS)
-            page = browser.new_page(locale="pt-BR")
 
             for n, href in enumerate(links, 1):
+                browser = pw.chromium.launch(headless=HEADLESS)
+                page = browser.new_page(locale="pt-BR")
                 url = href if href.startswith("http") else urljoin(BASE, href)
                 if url in processed:
                     print(f"[{n}/{len(links)}] {url} → skipping (already saved)")
@@ -142,9 +142,9 @@ def main() -> None:
                 else:
                     print("    … JSON-LD with telephone not found")
 
-                time.sleep(1.2)  # friendly delay
+                browser.close()
 
-            browser.close()
+                time.sleep(1.2)  # friendly delay
 
     print(f"\n💾 details saved to {OUTPUT_CSV.resolve()}")
 
